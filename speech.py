@@ -12,11 +12,12 @@ from configparser import ConfigParser
 from webScrape import get_text_from_webpage
 from getSearch import get_url
 from azureSTT import SpeechToTextManager
+
+
 recognizer = sr.Recognizer()
 
 
 def get_default():
-
     config = ConfigParser()
     config.read('config.ini')
     file_path = config['DEFAULT']['FILE_PATH']
@@ -26,51 +27,47 @@ def get_url_text(question):
     response = get_url(question)
     result = get_text_from_webpage(response)
     return result
+
+WAKE_WORD="Jarvis"
 def listen_for_wake_word():
-    with sr.Microphone() as source:
-        print("Listening for wake word...")
+    recognizer = sr.Recognizer()
+    microphone = sr.Microphone()
+
+    with microphone as source:
+        print("Adjusting for ambient noise...") 
+        recognizer.adjust_for_ambient_noise(source)
+        print(f"Listening for wake word: '{WAKE_WORD}'")
         while True:
-            audio = recognizer.listen(source, phrase_time_limit=3)
+            audio = recognizer.listen(source)
             try:
-                wake_word = recognizer.recognize_google(audio)
-                if "robot" in wake_word.lower():
-                    os.chdir(f"{default_path}/voiceActivatedAssistant")
-                    player = vlc.MediaPlayer("roboIntro.wav")
-                    player.play()
+                # Recognize the speech using Google's speech recognition
+                command = recognizer.recognize_google(audio).lower()
+                # Check if the wake word is in the recognized command
+                if WAKE_WORD.lower() in command:
+                    
                     print("Wake word detected!")
                     return True
-                if "thank you robot" in wake_word.lower():
-                    os.chdir(f"{default_path}/voiceActivatedAssistant")
-                    player = vlc.MediaPlayer("roboOutro.wav")
-                    player.play()
-                    time.sleep(16)
-                    quit()
             except sr.UnknownValueError:
-                continue
+                # If speech is unintelligible
+                print("Could not understand the audio")
             except sr.RequestError:
-                print("Network issue")
-                break
+                # If there's an error with the recognizer
+                print("Could not request results; check your network connection")
 
 
 def listen():
-    with sr.Microphone() as source:
-        time.sleep(1.3)
-        print("Listening...")
-        azure_stt = SpeechToTextManager()
-        audio = azure_stt.speechtotext_from_mic()
-    try:
-        command = audio
-        print(f"Recognized {command}")
-        return command
-    except sr.UnknownValueError:
-        print("Could not recognize audio")
-        return None
-    except sr.RequestError:
-        print("Could not request results; check network connection")
-        return None
+    print("Listening...")
+    azure_stt = SpeechToTextManager()
+    audio = azure_stt.speechtotext_from_mic()
+    command = audio
+    print(f"Recognized {command}")
+    return command
+
     
-
-
+def play_intro():
+    player = vlc.MediaPlayer(f'{default_path}/voiceActivatedAssistant/roboIntro.wav')
+    player.play()
+    time.sleep(3)
 def ai_question(command, question):
     load_dotenv()
     api_key = os.getenv('OPENAI_KEY')
@@ -149,7 +146,7 @@ def ai_no_url(command):
     return AIresponse
 def azureTTS(userQuestion):
 
-    file_path = f"{default_path}/voiceActivatedAssistant/audio/{uuid.uuid4()}"
+    file_path = f"{default_path}/voiceActivatedAssistant/audio/{uuid.uuid4()}.wav"
     question = userQuestion
     styles = ['angry', 'cheerful', 'excited', 'friendly', 'hopeful', 'sad', 'shouting', 'terrified', 'unfriendly', 'whispering']
 
@@ -196,9 +193,9 @@ def run_assistant():
                 response = ai_question(result, command)
             
             player = vlc.MediaPlayer(f"{azureTTS(response)}")
+            time.sleep(1)
             player.play()
-            media_length = player.get_length() / 1000
-            time.sleep(media_length)
+            
             break
 
 def wipeFiles(file_path):
@@ -209,6 +206,7 @@ def wipeFiles(file_path):
 if __name__ == "__main__":
     while True:
         if listen_for_wake_word():
+            play_intro()
             run_assistant()
             
     
