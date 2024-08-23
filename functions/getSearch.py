@@ -6,4 +6,3 @@ def get_url(question):
     for url in search(query, num=1, stop=1):
         print(url)
         return url
-        
